@@ -166,7 +166,7 @@ class LayeredModel(model.Model):
 
         self.H = self.Hi.sum()
 
-        if not (self.nz==2):
+        if not (self.nz==2 and self.rd and self.delta):
             self.gpi = self.g*(self.rhoi[1:]-self.rhoi[:-1])/self.rhoi[:-1]
             self.f2gpi = (self.f2/self.gpi)[:,np.newaxis,np.newaxis]
 
