@@ -1,2 +1,0 @@
-recursive-include pyqg *.pyx
-recursive-exclude pyqg *.c
