@@ -74,7 +74,12 @@ class BTModel(model.Model):
     def _initialize_inversion_matrix(self):
         """ the inversion """
         # The bt model is diagonal. The inversion is simply qh = -kappa**2 ph
-        self.a = -(self.wv2i+self.kd2)[np.newaxis, np.newaxis, :, :]
+        k2sum = self.wv2 + self.kd2
+        ik2sum = k2sum!=0.
+        k2sumi = np.zeros_like(self.wv2)
+        k2sumi[ik2sum] = k2sum[ik2sum]**-1
+        #self.a = -(self.wv2i+self.kd2)[np.newaxis, np.newaxis, :, :]
+        self.a = -k2sumi[np.newaxis, np.newaxis, :, :]
 
     def _initialize_forcing(self):
         pass
