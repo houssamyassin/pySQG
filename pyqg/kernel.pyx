@@ -75,6 +75,10 @@ cdef class PseudoSpectralKernel:
     cdef DTYPE_real_t [:] Ubg
     cdef DTYPE_real_t [:] Qy
     cdef readonly DTYPE_com_t [:, :] _ikQy
+	
+	# external forcing
+    cdef public DTYPE_real_t forc_amp
+    cdef public DTYPE_com_t [:, :] ext_forc
 
     # spectral filter
     # TODO: figure out if this really needs to be public
@@ -165,6 +169,10 @@ cdef class PseudoSpectralKernel:
 
         # friction
         self.rek = 0.0
+		
+		# external forcing
+        self.forc_amp = 0.0
+        self.ext_forc = np.zeros((self.nl, self.nk), DTYPE_com)
 
         # the tendency
         self.dqhdt = self._empty_com()
@@ -360,11 +368,26 @@ cdef class PseudoSpectralKernel:
                       num_threads=self.num_threads):
                 for i in range(self.nk):
                     self.dqhdt[k,j,i] = (
-                     self.dqhdt[k,j,i] +
+                     self.dqhdt[k,j,i] -
                              (self.rek *
-                             self._k2l2[j,i] *
-                             self.ph[k,j,i]) )
+                             self.qh[k,j,i]) )
         return
+
+    def _do_external_forcing(self):
+        self.__do_external_forcing()
+    
+    cdef void __do_external_forcing(self) nogil:
+        cdef Py_ssize_t k = self.nz-1
+        cdef Py_ssize_t j, i
+        if self.forc_amp:
+            for j in prange(self.nl, nogil=True, schedule='static',
+                      chunksize=self.chunksize,
+                      num_threads=self.num_threads):
+                for i in range(self.nk):
+                    self.dqhdt[k,j,i] = (
+                     self.dqhdt[k,j,i] + self.ext_forc[j,i])
+        return
+	
 
     def _forward_timestep(self):
         """Step forward based on tendencies"""

@@ -105,6 +105,11 @@ class Model(PseudoSpectralKernel):
         f = None,                   # coriolis parameter (not necessary for two-layer model
                                     #  if deformation radius is provided)
         g= 9.81,                    # acceleration due to gravity
+        forc_amp = 0.,              # stochastic forcing amplitude
+        forc_corr = 0.,             # stochastic forcing correlation coefficient
+        k_forc_min = 0.,            # wavenumbers between k_forc_min and k_forc_max
+        k_forc_max = 0.,            # are forced
+        steady_forcing = False,     # 
         # diagnostics parameters
         diagnostics_list='all',     # which diagnostics to output
         # fft parameters
@@ -183,6 +188,13 @@ class Model(PseudoSpectralKernel):
         # friction
         self.rek = rek
         self.filterfac = filterfac
+        
+        # stochastic forcing
+        self.forc_amp = forc_amp         
+        self.forc_corr = forc_corr            
+        self.k_forc_min = k_forc_min           
+        self.k_forc_max = k_forc_max
+        self.steady_forcing = steady_forcing
 
         # constants
         self.g = g
@@ -352,6 +364,8 @@ class Model(PseudoSpectralKernel):
 
         self._do_friction()
         # apply friction
+        
+        self._calc_external_forcing()
 
         self._do_external_forcing()
         # apply external forcing
@@ -435,9 +449,36 @@ class Model(PseudoSpectralKernel):
 
     def _filter(self, q):
         return self.filtr * q
+        
+    def _calc_external_forcing(self):
+        if self.forc_amp:
+            if self.steady_forcing: #Shepherd 1987 forcing
+                #sum_psi2 = 0.
+                ph_f = np.zeros_like(self.ph)
+                for j in range(self.nl):
+                    for i in range(self.nk):
+                        if self.k_forc_min <= self.wv[j,i] <= self.k_forc_max:
+                            #sum_psi2 = sum_psi2 + np.abs(self.ph[0,j,i])**2
+                            ph_f[0,j,i] = self.ph[0,j,i]
+                            self.ext_forc[j,i] = self.ph[0,j,i]
+                sum_psi2 = self.spec_var(ph_f)
+                for j in range(self.nl):
+                    for i in range(self.nk):
+                        if self.k_forc_min <= self.wv[j,i] <= self.k_forc_max:
+                            self.ext_forc[j,i] = -(self.forc_amp*self.ext_forc[j,i]/sum_psi2 ) 
+            else: #Markovian forcing as in Smith et al 2002
+                for j in range(self.nl):
+                    for i in range(self.nk):
+                        if self.k_forc_min <= self.wv[j,i] <= self.k_forc_max:
+                            rn_ph = np.exp(1j*2*np.pi*np.random.rand())
+                            self.ext_forc[j,i] = ( self.forc_corr*self.ext_forc[j,i] 
+                                + (1-self.forc_corr**2)**(0.5)*rn_ph )
+                gen = -self.spec_sum(np.real(self.ext_forc*np.conj(self.ph)))/self.M**2
+                for j in range(self.nl):
+                    for i in range(self.nk):
+                        if self.k_forc_min <= self.wv[j,i] <= self.k_forc_max:
+                            self.ext_forc[j,i] = self.forc_amp*self.ext_forc[j,i]/gen
 
-    def _do_external_forcing(self):
-        pass
 
     # logger
     def _initialize_logger(self):
@@ -661,6 +702,15 @@ class Model(PseudoSpectralKernel):
         var_dens[...,0] = var_dens[...,0]/2.
         var_dens[...,-1] = var_dens[...,-1]/2.
         return var_dens.sum()
+    
+    def spec_sum(self,ph2):
+        """Compute total spectral sum of the real spectral quantity``ph^2``. """
+
+        ph2 = 2.*ph2
+        ph2[...,0] = ph2[...,0]/2.
+        ph2[...,-1] = ph2[...,-1]/2.
+
+        return ph2.sum(axis=(-1,-2))
 
 
     def set_qh(self, qh):
