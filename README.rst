@@ -2,8 +2,8 @@
    :alt:
 
 
-pyqg: Python Quasigeostrophic Model
-===================================
+pySQG: a Python Surface Quasigeostrophic Model
+================================================
 
 pyqg is a python solver for quasigeostrophic systems. Quasigeostophic
 equations are an approximation to the full fluid equations of motion in
