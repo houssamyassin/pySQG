@@ -1,5 +1,4 @@
-.. figure:: https://github.com/houssamyassin/pySQG/blob/master/docs/_static/speed.png?raw=true
-   :alt:
+![Speed spectrum of surface‐quasigeostrophic turbulence](https://github.com/houssamyassin/pySQG/blob/master/docs/_static/speed.png?raw=true)
 
 pySQG: a Python Surface Quasigeostrophic Model
 ================================================
