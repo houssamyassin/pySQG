@@ -1,27 +1,18 @@
-.. figure:: https://github.com/houssamyassin/pysqg/blob/master/docs/_static/speed.png?raw=true
+.. figure:: https://github.com/houssamyassin/pySQG/blob/master/docs/_static/speed.png?raw=true
    :alt:
-
 
 pySQG: a Python Surface Quasigeostrophic Model
 ================================================
 
-pyqg is a python solver for quasigeostrophic systems. Quasigeostophic
-equations are an approximation to the full fluid equations of motion in
-the limit of strong rotation and stratitifcation and are most applicable
-to geophysical fluid dynamics problems.
+A fork of [pyqg](https://github.com/pyqg/pyqg) that generalizes the model's surface quasigeostrophic module to allow for arbitrary vertical density stratification. 
 
-Students and researchers in ocean and atmospheric dynamics are the
-intended audience of pyqg. The model is simple enough to be used by
-students new to the field yet powerful enough for research. We strive
-for clear documentation and thorough testing.
+Surface quasigeostrophy describes the evolution of buoyancy anomalies at the surface of a rapidly rotating, strongly stratified fluid. Examples of such surfaces include the atmospheric tropopause and the ocean surface. The theory was originally developed for the atmosphere, ([Blumen 1978](https://doi.org/10.1175/1520-0469(1978)035<0774:UPVFPI>2.0.CO;2), [Held et al. 1995](https://doi.org/10.1017/S0022112095000012)) where the assumption of uniform stratification is appropriate. However, ocean observations indicate that buoyancy anomalies dominate wintertime dynamics in major ocean currents, suggesting that surface quasigeostrophy is a useful model for upper ocean turbulence ([Lapyere \& Klein 2006](https://doi.org/10.1175/JPO2840.1)). The uniform stratification model predicts kinetic energy spectra that are too shallow to be consistent with ocean measurements [(Callies & Ferrari 2013)](https://doi.org/10.1175/JPO-D-13-063.1). 
 
-pyqg supports a variety of different configurations using the same
-computational kernel. The different configurations are evolving and are
-described in detail in the documentation. The kernel, implement in
-cython, uses a pseudo-spectral method which is heavily dependent of the
-fast Fourier transform. For this reason, pyqg tries to use pyfftw and
-the FFTW Fourier Transform library. (If pyfftw is not available, it
-falls back on numpy.fft) With pyfftw, the kernel is multi-threaded but
-does not support mpi. Optimal performance will be achieved on a single
-system with many cores.
+[Yassin & Griffies (2022)](https://doi.org/10.1175/JPO-D-22-0040.1) demonstrate that this inconsistency arises from the uniform vertical stratification assumption in the original model. The dynamics of surface buoyancy anomalies are highly sensitive to the underlying stratification. The figure above shows how vertical stratification profiles control the dynamical regime of surface buoyancy anomalies. In particular, the ocean is characterized by a weakly stratified mixed layer overlying a stratified interior, which extends the range of mixed-layer eddies and steepens their spectral slopes.
+
+This repository extends the original [pyqg](https://github.com/pyqg/pyqg) surface quasigeostrophy module so it supports arbitrary vertical stratification. Given any vertical buoyancy frequency profile, the model calculates the spectral space inversion relation between the surface buoyancy and the streamfunction by solving a boundary-value problem for the vertical mode structure at each horizontal wavenumber. This fork also adds  spectrally localized stochastic forcing, which is convenient when measuring spectral slopes. The core solvers and documentation remain those of the original model. 
+
+For more details, see:
+- Yassin & Griffies (2022), ["Surface Quasigeostrophic Turbulence in Variable Stratification"](https://doi.org/10.1175/JPO-D-22-0040.1), *Journal of Physical Oceanography*, 52, 2995–3013.
+- Yassin (2023),  ["The Buoyancy Staircase Limit in Surface Quasigeostrophic Turbulence"](https://doi.org/10.1017/jfm.2023.318), *Journal of Fluid Mechanics*, 962, A35.
 
