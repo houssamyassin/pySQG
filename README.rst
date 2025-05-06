@@ -1,11 +1,9 @@
-.. figure:: https://github.com/pyqg/pyqg/blob/master/docs/_static/vortex_rollup.png
+.. figure:: https://github.com/pyqg/pyqg/blob/master/docs/_static/speed.png
    :alt:
 
 
 pyqg: Python Quasigeostrophic Model
 ===================================
-
-|DOI| |pypi| |Build Status| |codecov| |docs| |binder|
 
 pyqg is a python solver for quasigeostrophic systems. Quasigeostophic
 equations are an approximation to the full fluid equations of motion in
