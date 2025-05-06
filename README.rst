@@ -1,4 +1,4 @@
-.. figure:: https://github.com/pyqg/pyqg/blob/master/docs/_static/speed.png
+.. figure:: https://github.com/houssamyassin/pysqg/blob/master/docs/_static/speed.png?raw=true
    :alt:
 
 
@@ -24,3 +24,4 @@ the FFTW Fourier Transform library. (If pyfftw is not available, it
 falls back on numpy.fft) With pyfftw, the kernel is multi-threaded but
 does not support mpi. Optimal performance will be achieved on a single
 system with many cores.
+
