@@ -29,10 +29,16 @@ DTYPE_com = np.complex128
 ctypedef np.float64_t DTYPE_real_t
 ctypedef np.complex128_t DTYPE_com_t
 
+# Needed for external forcing calculation
+from libc.math cimport sqrt
+
+
 cdef class PseudoSpectralKernel:
     # array shapes
     cdef public int nx, ny, nz
     cdef public int nk, nl
+    cdef public DTYPE_real_t M2
+	
 
     ### the main state variables (memory views to numpy arrays) ###
     # pv
@@ -78,7 +84,12 @@ cdef class PseudoSpectralKernel:
 	
 	# external forcing
     cdef public DTYPE_real_t forc_amp
-    cdef public DTYPE_com_t [:, :] ext_forc
+    cdef DTYPE_com_t [:, :] ext_forc
+    cdef public DTYPE_real_t forc_corr
+    cdef public DTYPE_real_t forc_corr2
+    cdef public DTYPE_com_t [:, :] rn_ph
+	
+	
 
     # spectral filter
     # TODO: figure out if this really needs to be public
@@ -121,6 +132,7 @@ cdef class PseudoSpectralKernel:
         self.ll = np.zeros((self.nl), DTYPE_real)
         self._il = np.zeros((self.nl), DTYPE_com)
         self._k2l2 = np.zeros((self.nl, self.nk), DTYPE_real)
+        self.M2 = 0
 
         # initialize FFT inputs / outputs as byte aligned by pyfftw
         q = self._empty_real()
@@ -171,8 +183,13 @@ cdef class PseudoSpectralKernel:
         self.rek = 0.0
 		
 		# external forcing
-        self.forc_amp = 0.0
-        self.ext_forc = np.zeros((self.nl, self.nk), DTYPE_com)
+        #self.forc_amp = 0.0
+        #self.forc_corr = 0.0
+        #self.forc_corr2 = 0.0
+        ext_forc = np.zeros((self.nl, self.nk), DTYPE_com)
+        self.ext_forc = ext_forc
+        self.rn_ph = np.zeros((self.nl, self.nk), DTYPE_com)
+
 
         # the tendency
         self.dqhdt = self._empty_com()
@@ -375,11 +392,41 @@ cdef class PseudoSpectralKernel:
 
     def _do_external_forcing(self):
         self.__do_external_forcing()
-    
+
     cdef void __do_external_forcing(self) nogil:
         cdef Py_ssize_t k = self.nz-1
         cdef Py_ssize_t j, i
+        cdef DTYPE_real_t gen = 0.
+        cdef DTYPE_real_t F_ph_star = 0.
+        
         if self.forc_amp:
+            # First calculate forcing based on Smith et al 2002
+            for j in prange(self.nl, nogil=True, schedule='static',
+                      chunksize=self.chunksize,
+                      num_threads=self.num_threads):
+                for i in range(self.nk):
+                    self.ext_forc[j,i] = ( self.forc_corr*self.ext_forc[j,i]
+                        + sqrt(1-self.forc_corr2)*self.rn_ph[j,i] )
+
+            # Now we normalize to obtain epsilon=forc_amp (see spec_sum)
+            for j in prange(self.nl, nogil=True, schedule='static',
+                      chunksize=self.chunksize,
+                      num_threads=self.num_threads):
+                for i in range(self.nk):
+                    F_ph_star = (self.ph[k,j,i]*(self.ext_forc[j,i].real - 1j*self.ext_forc[j,i].imag)).real/self.M2
+                    if i==0 or i==self.nk-1: 
+                        gen += F_ph_star
+                    else:
+                        gen += 2.*F_ph_star
+            			
+            if gen!=0.:
+                for j in prange(self.nl, nogil=True, schedule='static',
+                          chunksize=self.chunksize,
+                          num_threads=self.num_threads):
+                    for i in range(self.nk):
+                        self.ext_forc[j,i] = -self.forc_amp*self.ext_forc[j,i]/gen
+							
+		    # Apply forcing to time-tendency
             for j in prange(self.nl, nogil=True, schedule='static',
                       chunksize=self.chunksize,
                       num_threads=self.num_threads):
@@ -555,6 +602,13 @@ cdef class PseudoSpectralKernel:
     property vq:
         def __get__(self):
             return np.asarray(self.vq)
+    property ext_forc:
+        def __get__(self):
+            return np.asarray(self.ext_forc)
+        def __set__(self, np.ndarray[DTYPE_com_t, ndim=2] b):
+            cdef  DTYPE_com_t [:, :] b_view = b
+            self.ext_forc[:] = b_view
+
 
 
 # general purpose timestepping routines

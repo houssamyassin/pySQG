@@ -109,7 +109,11 @@ class Model(PseudoSpectralKernel):
         forc_corr = 0.,             # stochastic forcing correlation coefficient
         k_forc_min = 0.,            # wavenumbers between k_forc_min and k_forc_max
         k_forc_max = 0.,            # are forced
-        steady_forcing = False,     # 
+        second_forcing = False,      # Boolean, appy a second forcing between k_forc_minsec and k_forc_max_sec
+        k_forc_min_sec = 0.,        # 
+        k_forc_max_sec = 0.,        #
+        second_forcing_ratio = 0,   # The ratio of the second forcing amplitude to the first forcing amplitude.
+                                    # forc_amp is the amplitude of the total forcing.
         # diagnostics parameters
         diagnostics_list='all',     # which diagnostics to output
         # fft parameters
@@ -191,10 +195,16 @@ class Model(PseudoSpectralKernel):
         
         # stochastic forcing
         self.forc_amp = forc_amp         
-        self.forc_corr = forc_corr            
+        self.forc_corr = forc_corr  
+        self.forc_corr2 = self.forc_corr**2          
         self.k_forc_min = k_forc_min           
         self.k_forc_max = k_forc_max
-        self.steady_forcing = steady_forcing
+        self.second_forcing = second_forcing
+        self.k_forc_min_sec  = k_forc_min_sec
+        self.k_forc_max_sec = k_forc_max_sec
+        self.second_forcing_ratio = second_forcing_ratio
+        
+        
 
         # constants
         self.g = g
@@ -213,7 +223,9 @@ class Model(PseudoSpectralKernel):
         self._initialize_time()
         self._initialize_inversion_matrix()
         self._initialize_diagnostics(diagnostics_list)
+        self._create_forcing_mask()
 
+        
 
     def run_with_snapshots(self, tsnapstart=0., tsnapint=432000.):
         """Run the model forward, yielding to user code at specified intervals.
@@ -353,7 +365,7 @@ class Model(PseudoSpectralKernel):
         return omega, phi
 
     ### PRIVATE METHODS - not meant to be called by user ###
-
+    
     def _step_forward(self):
 
         self._invert()
@@ -416,6 +428,7 @@ class Model(PseudoSpectralKernel):
 
         # constant for spectral normalizations
         self.M = self.nx*self.ny
+        self.M2 = self.M**2
 
         # isotropic wavenumber^2 grid
         # the inversion is not defined at kappa = 0
@@ -425,6 +438,37 @@ class Model(PseudoSpectralKernel):
         iwv2 = self.wv2 != 0.
         self.wv2i = np.zeros_like(self.wv2)
         self.wv2i[iwv2] = self.wv2[iwv2]**-1
+    
+    def _create_forcing_mask(self):
+        wv_min = np.ma.masked_where(self.k_forc_min <= self.wv,self.wv)
+        wv_max = np.ma.masked_where(self.wv <= self.k_forc_max,self.wv)
+        
+        self.wv_mask = np.zeros(self.wv.shape)
+        for j in range(self.nl):
+            for i in range(self.nk):
+                if wv_min.mask[j,i] and wv_max.mask[j,i]:
+                    self.wv_mask[j,i] = 1.
+        
+        self.wv_mask_ind = np.nonzero(self.wv_mask)
+        self.len_mask = self.wv_mask[self.wv_mask_ind].shape[0]
+        
+        if self.second_forcing:
+            wv_min_sec = np.ma.masked_where(self.k_forc_min_sec <= self.wv,self.wv)
+            wv_max_sec = np.ma.masked_where(self.wv <= self.k_forc_max_sec,self.wv)
+            
+            self.wv_mask_sec = np.zeros(self.wv.shape)
+            for j in range(self.nl):
+                for i in range(self.nk):
+                    if wv_min_sec.mask[j,i] and wv_max_sec.mask[j,i]:
+                        self.wv_mask_sec[j,i] = 1.
+            
+            self.wv_mask_ind_sec = np.nonzero(self.wv_mask_sec)
+            self.len_mask_sec = self.wv_mask_sec[self.wv_mask_ind_sec].shape[0]        
+
+        
+        self.rn_ph = np.zeros((self.nl,self.nk), dtype=np.complex128)
+        self.F_ph_star = np.zeros((self.nl,self.nk), dtype=np.complex128)
+        
 
     def _initialize_background(self):
         raise NotImplementedError(
@@ -449,36 +493,18 @@ class Model(PseudoSpectralKernel):
 
     def _filter(self, q):
         return self.filtr * q
-        
+    
+    # This function only computes the random numbers needed for the external forcing.
+    # The actual forcing function is constructed and applied in __do_external_forcing
     def _calc_external_forcing(self):
-        if self.forc_amp:
-            if self.steady_forcing: #Shepherd 1987 forcing
-                #sum_psi2 = 0.
-                ph_f = np.zeros_like(self.ph)
-                for j in range(self.nl):
-                    for i in range(self.nk):
-                        if self.k_forc_min <= self.wv[j,i] <= self.k_forc_max:
-                            #sum_psi2 = sum_psi2 + np.abs(self.ph[0,j,i])**2
-                            ph_f[0,j,i] = self.ph[0,j,i]
-                            self.ext_forc[j,i] = self.ph[0,j,i]
-                sum_psi2 = self.spec_var(ph_f)
-                for j in range(self.nl):
-                    for i in range(self.nk):
-                        if self.k_forc_min <= self.wv[j,i] <= self.k_forc_max:
-                            self.ext_forc[j,i] = -(self.forc_amp*self.ext_forc[j,i]/sum_psi2 ) 
-            else: #Markovian forcing as in Smith et al 2002
-                for j in range(self.nl):
-                    for i in range(self.nk):
-                        if self.k_forc_min <= self.wv[j,i] <= self.k_forc_max:
-                            rn_ph = np.exp(1j*2*np.pi*np.random.rand())
-                            self.ext_forc[j,i] = ( self.forc_corr*self.ext_forc[j,i] 
-                                + (1-self.forc_corr**2)**(0.5)*rn_ph )
-                gen = -self.spec_sum(np.real(self.ext_forc*np.conj(self.ph)))/self.M**2
-                for j in range(self.nl):
-                    for i in range(self.nk):
-                        if self.k_forc_min <= self.wv[j,i] <= self.k_forc_max:
-                            self.ext_forc[j,i] = self.forc_amp*self.ext_forc[j,i]/gen
-
+        if self.forc_amp:#Markovian forcing as in Smith et al 2002
+            self.rn_ph.base[self.wv_mask_ind] = np.exp(1j*2*np.pi*np.random.rand(self.len_mask))/self.len_mask
+            
+            if self.second_forcing:
+                self.rn_ph.base[self.wv_mask_ind_sec] += ( self.second_forcing_ratio*
+                                                            np.exp(1j*2*np.pi*np.random.rand(self.len_mask_sec))
+                                                            /self.len_mask_sec )
+                
 
     # logger
     def _initialize_logger(self):
